@@ -11,10 +11,10 @@ epole1 = euler_pole('sam.dat', 'href.txt', 'dat with HREF');
 epole1.plot_result(250);
 
 % compute and plot the velocities
-v2 = epole1.plot_prediction(lla, 100);
+v2 = epole1.plot_prediction(lla, 100, true);
 
 % now using the dat file,  but without specifying a list of stations
 epole2 = euler_pole('sam.dat', [], 'data without HREF');
 
 epole2.plot_result(250);
-v3 = epole2.plot_prediction(lla, 100);
+v3 = epole2.plot_prediction(lla, 100, true);

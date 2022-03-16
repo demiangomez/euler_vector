@@ -467,7 +467,7 @@ classdef euler_pole
             
             % Calculate the angle between the N-axis and the 
             % largest eigenvector
-            angle = atan2(max_evc(1), max_evc(2));
+            angle = atan2(max_evc(2), max_evc(1));
             
             % Make sure the angle is between 0 and 2pi
             if angle < 0
