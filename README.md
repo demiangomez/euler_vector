@@ -1,8 +1,12 @@
 # Euler pole calculation: A class to calculate and plot Euler poles of rotation 
 the only dependency is m_map: https://www.eoas.ubc.ca/~rich/map.html
+
 As input, the class can take as first argument:
+
   a) text file, 
+  
   b) a matrix with the same format as the file, see below
+  
   c) a folder with json files from Parallel.GAMIT.
   
  A second argument (optional) provides the list of stations to use to 
