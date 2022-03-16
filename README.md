@@ -1,11 +1,12 @@
 # Euler pole calculation: A class to calculate and plot Euler poles of rotation 
-the only dependency is m_map: https://www.eoas.ubc.ca/~rich/map.html
+This is the code related to the paper "Linear system approach to Euler vector inversion" from Smalley, Gómez, and Bevis.
+The only dependency is m_map: https://www.eoas.ubc.ca/~rich/map.html
 
 As input, the class can take as first argument:
 
-  a) text file, 
+  a) text file,
   
-  b) a matrix with the same format as the file, see below
+  b) a matrix with the same format as the file, see below,
   
   c) a folder with json files from Parallel.GAMIT.
   
