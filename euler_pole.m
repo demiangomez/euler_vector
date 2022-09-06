@@ -65,6 +65,8 @@ classdef euler_pole
         vm
         rms
         wrms
+        wrms_n
+        wrms_e
         pole_name % better to reference the pole itself, not the figure
     end
     
@@ -96,15 +98,20 @@ classdef euler_pole
             stations_input = varargin{1};
             pole_stations = {};
             
-            if and(nargin > 1, ~isempty(varargin{2}))
-                pole_stations = varargin{2};
-                
-                if ~iscell(pole_stations)
-                    if isfile(pole_stations)
-                        % file with station list, load it
-                        pole_stations = table2cell(readtable(pole_stations));
-                    elseif ischar(pole_stations)
-                        pole_stations = cellstr(pole_stations);
+            if nargin > 1
+                % more then one input argument
+                if ~isempty(varargin{2})
+                    % if second argument is not empty, we have a list of
+                    % stations to build the HREF
+                    pole_stations = varargin{2};
+                    
+                    if ~iscell(pole_stations)
+                        if isfile(pole_stations)
+                            % file with station list, load it
+                            pole_stations = table2cell(readtable(pole_stations));
+                        elseif ischar(pole_stations)
+                            pole_stations = cellstr(pole_stations);
+                        end
                     end
                 end
             end
@@ -245,7 +252,9 @@ classdef euler_pole
             % variances updated by the LS estimation
             w=diag(P);
             self.wrms = sqrt(sum(w(:).*(V(:)).^2)./sum(w));
-            
+            self.wrms_n = sqrt(sum(w(1:end/2).*(V(1:end/2)).^2)./sum(w(1:end/2)));
+            self.wrms_e = sqrt(sum(w(end/2+1:end).*(V(end/2+1:end)).^2)./sum(w(end/2+1:end)));
+
             % save the pole as is
             self.pole_X = X;
             
@@ -267,8 +276,8 @@ classdef euler_pole
             % Propagate the Euler pole covariance 
             % See eq (15) from EPC (Goudarzi et al 2013)
             G = [         X(1)/mT_            X(2)/mT_         X(2)/mT_;
-                 -1/mT_.^2*pXZ/mXY   -1/mT_.^2*pYZ/mXY    -1/mT_.^2*mXY;
-                         -X(2)/mXY            X(1)/mXY               0];
+                 -1/mT_.^2*pXZ/mXY   -1/mT_.^2*pYZ/mXY     1/mT_.^2*mXY;
+                    -X(2)/(mXY.^2)       X(1)/(mXY.^2)               0];
             
             % propagate
             self.cov_lla = G * self.cov_xyz * G';
@@ -286,51 +295,55 @@ classdef euler_pole
             % plot the results from the inversion
             figure('Name', self.pole_name);
             clf
-            subplot(3,2,[1 3 5])
+            subplot(2,2,[1 3])
             m_proj('Mercator','lon', [min([self.stations(:).lon self.pole(2)])-10 ...
                                       max([self.stations(:).lon self.pole(2)])+10], ...
                               'lat', [min([self.stations(:).lat self.pole(1)])- 5 ...
                                       max([self.stations(:).lat self.pole(1)])+ 5])
 
-            m_quiver([self.stations(:).lon]', [self.stations(:).lat]', ...
-                [self.stations(:).ve]' .* v_scale, [self.stations(:).vn]' .* v_scale, 0,'b')
+            fr(1) = m_quiver([self.stations(:).lon]', [self.stations(:).lat]', ...
+                [self.stations(:).ve]' .* v_scale, [self.stations(:).vn]' .* v_scale, 0,'b');
             
             hold on
             
-            m_quiver([self.stations(:).lon]', [self.stations(:).lat]', ...
-                [self.vm(:).ve] .* v_scale, [self.vm(:).vn] .* v_scale, 0, 'r')
+            fr(2) = m_quiver([self.stations(:).lon]', [self.stations(:).lat]', ...
+                [self.vm(:).ve] .* v_scale, [self.vm(:).vn] .* v_scale, 0, 'r');
             
             % plot the location of the pole
-            m_plot(self.pole(2), self.pole(1), 'or','MarkerFaceColor','r')
+            fr(3) = m_plot(self.pole(2), self.pole(1), 'or','MarkerFaceColor','r');
             
+            % plot the error ellipse of the pole
+            % uses zero velocity so that the ellipse is on top of the pole
+            self.plot_ellipse(self.cov_lla, self.pole, 0, 0, 30)
+
             axis equal
             m_coast('color',[0 .6 0]);
-            title('Model: red; Data: blue')
-            xlabel('lon')
-            ylabel('lat')
+            title('(a) Map of velocities and Euler pole')
             grid on
             m_grid('tickdir','out', 'fontsize', 12);
+            legend(fr, 'Data', 'Model', 'Euler pole')
 
             % histogram of errors in N
-            subplot(3,2,2)
-            histfit([self.residuals(:).vn]')
-            title('Histogram of N differences')
+            subplot(2,2,2)
+            histfit([self.residuals(:).vn]' * 1000)
+            title('(b) North Histogram')
             grid on
             
             % histogram of errors in E
-            subplot(3,2,4)
-            histfit([self.residuals(:).ve]')
-            title('Histogram of E differences')
+            subplot(2,2,4)
+            histfit([self.residuals(:).ve]' * 1000)
+            title('(c) East Histogram')
             grid on
+            xlabel('[mm/yr]')
             
             % plot the RMS and WRMS
-            subplot(3,2,6)
-            stem([1 2],[self.rms self.wrms]*1000)
-            xlim([0 3])
-            title('RMS and WRMS')
-            ylabel('Error [mm]')
-            set(gca,'xtick',[1 2],'xticklabel',{'RMS', 'WRMS'});
-            grid on
+            %subplot(3,2,6)
+            %stem([1 2],[self.rms self.wrms]*1000)
+            %xlim([0 3])
+            %title('RMS and WRMS')
+            %ylabel('Error [mm]')
+            %set(gca,'xtick',[1 2],'xticklabel',{'RMS', 'WRMS'});
+            %grid on
         end
         
         function vel = compute_vel(self, x)
@@ -560,16 +573,24 @@ classdef euler_pole
             fields = fieldnames(t);
             
             stn_struct.name = lower(t.(fields{1}));
-            stn_struct.lat = t.(fields{2});
-            stn_struct.lon = t.(fields{3});
             
-            % convert from lla
-            stn_struct.x = t.(fields{9});
-            stn_struct.y = t.(fields{10});
-            stn_struct.z = t.(fields{11});
+            p = [t.(fields{2}) t.(fields{3}) t.(fields{4})];
+
+            % detect the type of input
+            [x, lla] = euler_pole.xyz_lla(p);
             
-            stn_struct.vn = t.(fields{4});
-            stn_struct.ve = t.(fields{5});
+            % lat lon input
+            stn_struct.lat = lla(:,1) * 180/pi;
+            stn_struct.lon = lla(:,2) * 180/pi;
+            
+            % ecef input
+            stn_struct.x = x(:,1);
+            stn_struct.y = x(:,2);
+            stn_struct.z = x(:,3);
+            
+            % velocity of stations
+            stn_struct.vn = t.(fields{5});
+            stn_struct.ve = t.(fields{6});
         end
         
         function [x, lla] = xyz_lla(lla_or_x)
@@ -609,29 +630,22 @@ classdef euler_pole
             % make design can accept any vector in either lat lon or XYZ
             % dimenensions must be n x 3
             
-            [x, lla] = euler_pole.xyz_lla(x);
+            [~, lla] = euler_pole.xyz_lla(x);
             
             n = size(lla,1);
             
-            % omega vectors
-            w1 = [repmat(1e-9, [n 1]), zeros([n 1]), zeros([n 1])];
-            w2 = [zeros([n 1]), repmat(1e-9, [n 1]), zeros([n 1])];
-            w3 = [zeros([n 1]), zeros([n 1]), repmat(1e-9, [n 1])];
-            
-            % cross product
-            wx = cross(w1, x);
-            wy = cross(w2, x);
-            wz = cross(w3, x);
-            
-            % express them in NEU
-            [Nx, Ex, ~] = ct2lg(wx(:, 1), wx(:, 2), wx(:, 3), lla(:,1), lla(:,2));
-            [Ny, Ey, ~] = ct2lg(wy(:, 1), wy(:, 2), wy(:, 3), lla(:,1), lla(:,2));
-            [Nz, Ez, ~] = ct2lg(wz(:, 1), wz(:, 2), wz(:, 3), lla(:,1), lla(:,2));
+            slat = sin(lla(:,1));
+            slon = sin(lla(:,2));
+            clat = cos(lla(:,1));
+            clon = cos(lla(:,2));
 
+            slatslon = slat.*slon;
+            slatclon = slat.*clon;
+            
+            Re=6378137;
+            
             % build the design matrix
-            A = [Nx Ny Nz
-                 Ex Ey Ez];
-
+            A=Re*[slon -clon zeros(n,1); -slatclon -slatslon clat]/1e9;
         end
 
         function Vg = x2g(Vx)
@@ -694,5 +708,3 @@ classdef euler_pole
         end
     end
 end
-
-
